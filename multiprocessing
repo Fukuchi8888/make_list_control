@@ -1,0 +1,64 @@
+import RPi.GPIO as GPIO
+import time
+import multiprocessing
+import numpy as np
+
+# GPIOピンの番号を設定
+robots_config = {0: {"upper_pin": 22, "lower_pin": 23, "offset": 0, "cooling_time": 10, "on_time_upper": 4, "on_time_lower": 4},
+                  1: {"upper_pin" : 18, "lower_pin" : 17, "offset" : 3, "cooling_time" : 10, "on_time_upper" :4, "on_time_lower" : 4}}
+
+period_time = 50
+
+# GPIOピンのモードを設定
+GPIO.setmode(GPIO.BCM)
+
+# GPIOピンを出力モードに設定
+for pin, config in robots_config.items():
+    GPIO.setup(config["upper_pin"], GPIO.OUT)
+    GPIO.setup(config["lower_pin"], GPIO.OUT)
+
+def make_control_list(offset, on_time_upper, on_time_lower, cooling_time, period):
+    control = []
+    control.extend([0]*offset)
+    while len(control) < period:
+        control.extend([1]*on_time_upper)
+        control.extend([0]*cooling_time)
+        control.extend([-1]*on_time_lower)
+        control.extend([0]*cooling_time)
+    if len(control) > period:
+        for i in range(len(control) - period):
+            control.pop()
+    
+    return control
+
+def control_robot(robot_number, pin1, pin2, command):
+    if command == 0:
+        GPIO.output(pin1, GPIO.LOW)  # ピンをOFF
+        GPIO.output(pin2, GPIO.LOW)  # ピンをOFF
+        print("rest_time  ", end =', ')
+        
+    elif command == 1:
+        GPIO.output(pin1, GPIO.HIGH)  # ピンをON
+        GPIO.output(pin2, GPIO.LOW)  # ピンをOFF
+        print("upper_curve", end =', ')
+    else:
+        GPIO.output(pin1, GPIO.LOW)  # ピンをOFF
+        GPIO.output(pin2, GPIO.HIGH)  # ピンをON
+        print("lower_curve", end =', ')
+    
+if __name__ == '__main__':
+    l = [[0]*period_time, [0]*period_time]
+    for robot, config in robots_config.items():
+        l[robot] = make_control_list(config["offset"], config["on_time_upper"], config["on_time_lower"], config["cooling_time"], period_time)
+        print(l[robot])
+    
+    for i in range(period_time):
+        for robot, config in robots_config.items():
+           control_robot(robot, config["upper_pin"], config["lower_pin"], l[robot][i])
+        print()
+        time.sleep(1)
+        
+    # GPIOピンをクリーンアップ
+    GPIO.cleanup()
+
+
