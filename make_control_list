@@ -1,0 +1,87 @@
+import RPi.GPIO as GPIO
+import time
+import multiprocessing
+
+# GPIOピンの番号を設定
+robots_config = {2: {"upper_pin": 22, "lower_pin": 23, "offset": 0, "cooling_time": 6, "on_time_upper": 2, "on_time_lower": 2},
+                  1: {"upper_pin" : 18, "lower_pin" : 17, "offset" : 3, "cooling_time" : 6, "on_time_upper" :2, "on_time_lower" : 2}}
+
+# GPIOピンのモードを設定
+GPIO.setmode(GPIO.BCM)
+
+# GPIOピンを出力モードに設定
+for pin, config in robots_config.items():
+    GPIO.setup(config["upper_pin"], GPIO.OUT)
+    GPIO.setup(config["lower_pin"], GPIO.OUT)
+
+lock = multiprocessing.Lock()
+
+# 各ピンを制御する関数
+def control_robot(pin1, pin2, on_time1, on_time2, cooling_time, offset, lock):
+    while not stop_flag.is_set():
+        GPIO.output(pin1, GPIO.LOW)
+        GPIO.output(pin2, GPIO.LOW)
+        time.sleep(offset)
+        while True:
+            with lock:
+                GPIO.output(pin1, GPIO.HIGH)  # ピンをON
+                print(str(pin1)+" on")
+                time.sleep(on_time1)
+                
+                GPIO.output(pin1, GPIO.LOW)  # ピンをOFF
+                print(str(pin1)+" off")
+                time.sleep(cooling_time)
+                
+                GPIO.output(pin2, GPIO.HIGH)  # ピンをON
+                print(str(pin2)+" on")
+                time.sleep(on_time2)
+                
+                GPIO.output(pin2, GPIO.LOW)  # ピンをOFF
+                print(str(pin2)+" off")
+                time.sleep(cooling_time)
+
+stop_flag = multiprocessing.Event()
+
+if __name__ == '__main__':
+    processes = []
+    print(len(robots_config))
+    try:
+        # プロセスを生成して関数を非同期に実行
+       
+        process1 = multiprocessing.Process(target=control_robot, args=(robots_config[1]["upper_pin"], robots_config[1]["lower_pin"],
+                                                                     robots_config[1]["on_time_upper"], robots_config[1]["on_time_lower"],
+                                                                     robots_config[1]["cooling_time"], robots_config[1]["offset"], lock))
+        process1.start()
+        print("robot1 is rebooted\n")
+        time.sleep(5)
+         
+        process2 = multiprocessing.Process(target=control_robot, args=(robots_config[2]["upper_pin"], robots_config[2]["lower_pin"],
+                                                                     robots_config[2]["on_time_upper"], robots_config[2]["on_time_lower"],
+                                                                     robots_config[2]["cooling_time"], robots_config[2]["offset"], lock))
+        
+        process2.start()
+        print("robot2 is rebooted\n")
+       
+        time.sleep(10)
+        stop_flag.set()
+     
+        
+        if process1.is_alive():
+            print("robot1 is stopped")
+            process1.terminate()
+            
+        if process2.is_alive():
+            print("robot2 is stopped")
+            process2.terminate()
+        
+        
+        # プロセスの終了を待つ
+        for process in processes:
+            process.join()
+       
+    except KeyboardInterrupt:
+        pass
+    finally:
+        # GPIOピンをクリーンアップ
+        GPIO.cleanup()
+
